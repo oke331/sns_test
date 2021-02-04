@@ -53,54 +53,56 @@ class _MyHomePageState extends State<MyHomePage> {
           }
 
           return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                if (!snapshot.hasData || snapshot.data == null)
-                  Text('ログイン状態：未ログイン'),
-                if (snapshot.data != null && snapshot.data.isAnonymous)
-                  Text('ログイン状態：匿名ユーザー\nユーザーID：${snapshot.data.uid}'),
-                if (snapshot.data != null && !snapshot.data.isAnonymous)
-                  Text('ログイン状態：Googleログイン中\nユーザーID：${snapshot.data.uid}'),
-                SizedBox(height: 30),
-                ElevatedButton(
-                  child: Text('匿名ログイン'),
-                  onPressed: () async {
-                    await _auth.signInAnonymously();
-                  },
-                ),
-                ElevatedButton(
-                  child: Text('Google ログイン'),
-                  onPressed: () async {
-                    await _handleGoogleSignIn(context);
-                  },
-                ),
-                ElevatedButton(
-                  child: Text('Google ログイン & 匿名紐付け'),
-                  onPressed: () async {
-                    await _handleGoogleSignInAndConnectAnonymous(context);
-                  },
-                ),
-                SizedBox(height: 30),
-                ElevatedButton(
-                  child: Text('サインアウト'),
-                  onPressed: () async {
-                    _handleSignOut(context);
-                  },
-                  style: ElevatedButton.styleFrom(primary: Colors.red),
-                ),
-                SizedBox(height: 30),
-                ElevatedButton(
-                  child: Text('日付とユーザー書き込み'),
-                  onPressed: () async {
-                    await _setUserIdAndDateTime(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    primary: Colors.yellow,
-                    onPrimary: Colors.black,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  if (!snapshot.hasData || snapshot.data == null)
+                    Text('ログイン状態：未ログイン'),
+                  if (snapshot.data != null && snapshot.data.isAnonymous)
+                    Text('ログイン状態：匿名ユーザー\nユーザーID：${snapshot.data.uid}'),
+                  if (snapshot.data != null && !snapshot.data.isAnonymous)
+                    Text('ログイン状態：Googleログイン中\nユーザーID：${snapshot.data.uid}'),
+                  SizedBox(height: 30),
+                  ElevatedButton(
+                    child: Text('匿名ログイン'),
+                    onPressed: () async {
+                      await _auth.signInAnonymously();
+                    },
                   ),
-                )
-              ],
+                  ElevatedButton(
+                    child: Text('Google ログイン'),
+                    onPressed: () async {
+                      await _handleGoogleSignIn(context);
+                    },
+                  ),
+                  ElevatedButton(
+                    child: Text('Google ログイン & 匿名紐付け'),
+                    onPressed: () async {
+                      await _handleGoogleSignInAndConnectAnonymous(context);
+                    },
+                  ),
+                  SizedBox(height: 30),
+                  ElevatedButton(
+                    child: Text('サインアウト'),
+                    onPressed: () async {
+                      _handleSignOut(context);
+                    },
+                    style: ElevatedButton.styleFrom(primary: Colors.red),
+                  ),
+                  SizedBox(height: 30),
+                  ElevatedButton(
+                    child: Text('日付とユーザー書き込み'),
+                    onPressed: () async {
+                      await _setUserIdAndDateTime(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      primary: Colors.yellow,
+                      onPrimary: Colors.black,
+                    ),
+                  )
+                ],
+              ),
             ),
           );
         },
@@ -128,6 +130,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _handleGoogleSignInAndConnectAnonymous(
       BuildContext context) async {
+    if (_auth.currentUser == null) {
+      final snackBar = SnackBar(content: Text('匿名ログインしてからにしてくれい'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      return;
+    }
+
     try {
       GoogleSignInAccount googleUser = await _googleSignIn.signIn();
       GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -159,7 +167,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> _setUserIdAndDateTime(BuildContext context) async {
-    if (_auth == null || _auth.currentUser == null) {
+    if (_auth.currentUser == null) {
       final snackBar = SnackBar(content: Text('認証情報がないぜぇ？'));
       Scaffold.of(context).showSnackBar(snackBar);
       return;
