@@ -36,8 +36,9 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   final _googleSignIn = new GoogleSignIn();
   final _auth = FirebaseAuth.instance;
-  String email;
-  String pass;
+  String _email;
+  String _pass;
+  bool _isEmailVerified;
 
   @override
   Widget build(BuildContext context) {
@@ -68,10 +69,26 @@ class _MyHomePageState extends State<MyHomePage> {
                       Text('ログイン状態：匿名ログイン'),
                     if (snapshot.hasData)
                       for (UserInfo user in snapshot.data.providerData)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 30),
-                          child: Text(
-                              'ログイン状態：${user.providerId}\nuid：${user.uid}\nemail:${user.email}'),
+                        Column(
+                          children: [
+                            if (_isEmailVerified != null && _isEmailVerified)
+                              Text('メール確認済'),
+                            if (_isEmailVerified != null && !_isEmailVerified)
+                              Column(
+                                children: [
+                                  Text('メール未確認'),
+                                  ElevatedButton(
+                                      onPressed: () async =>
+                                          await _sendEmailVerification(),
+                                      child: Text('認証メールを送る'))
+                                ],
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 30),
+                              child: Text(
+                                  'ログイン状態：${user.providerId}\nuid：${user.uid}\nemail:${user.email}'),
+                            ),
+                          ],
                         ),
                     if (snapshot.hasData)
                       Text('Firebase上のuid：${snapshot.data.uid}'),
@@ -105,13 +122,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     TextField(
                       decoration: InputDecoration(labelText: 'email'),
                       onChanged: (val) {
-                        email = val;
+                        _email = val;
                       },
                     ),
                     TextField(
                       decoration: InputDecoration(labelText: 'pass'),
                       onChanged: (val) {
-                        pass = val;
+                        _pass = val;
                       },
                     ),
                     Row(
@@ -120,14 +137,14 @@ class _MyHomePageState extends State<MyHomePage> {
                         ElevatedButton(
                           child: Text('サインアップ'),
                           onPressed: () async {
-                            await _signUp(context);
+                            await _emailSignUp(context);
                           },
                           style: ElevatedButton.styleFrom(primary: Colors.red),
                         ),
                         ElevatedButton(
                           child: Text('ログイン'),
                           onPressed: () async {
-                            await _login(context);
+                            await _emailLogin(context);
                           },
                           style: ElevatedButton.styleFrom(primary: Colors.red),
                         ),
@@ -163,13 +180,23 @@ class _MyHomePageState extends State<MyHomePage> {
                     ElevatedButton(
                       child: Text('Googleのリンク解除'),
                       onPressed: () async {
-                        await _unlink(context);
+                        await _unlinkGoogle(context);
                       },
                       style: ElevatedButton.styleFrom(
                         primary: Colors.green,
                         onPrimary: Colors.white,
                       ),
-                    )
+                    ),
+                    ElevatedButton(
+                      child: Text('メールのリンク解除'),
+                      onPressed: () async {
+                        await _unlinkMail(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        primary: Colors.green,
+                        onPrimary: Colors.white,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -190,6 +217,7 @@ class _MyHomePageState extends State<MyHomePage> {
       GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
           idToken: googleAuth.idToken, accessToken: googleAuth.accessToken);
+
       await _auth.signInWithCredential(credential);
     } on Exception catch (e) {
       final snackBar = SnackBar(content: Text('おっと失敗したようだ'));
@@ -214,8 +242,9 @@ class _MyHomePageState extends State<MyHomePage> {
       final snackBar = SnackBar(content: Text('リンク完了したかもだぜぇ？'));
       Scaffold.of(context).showSnackBar(snackBar);
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'credential-already-in-use') {
+      if (e.code == 'email-already-in-use') {
         final snackBar = SnackBar(content: Text('エラー：すでに紐づいているとのこと'));
+        await _googleSignIn.signOut();
         Scaffold.of(context).showSnackBar(snackBar);
       } else {
         final snackBar = SnackBar(content: Text('おっと失敗したようだ'));
@@ -265,7 +294,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<void> _unlink(BuildContext context) async {
+  Future<void> _unlinkGoogle(BuildContext context) async {
     if (_auth.currentUser == null) {
       final snackBar = SnackBar(content: Text('認証情報がないぜぇ？'));
       Scaffold.of(context).showSnackBar(snackBar);
@@ -288,13 +317,21 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<void> _signUp(BuildContext context) async {
-    if (email == null && pass == null && pass.length > 5) {
-      final snackBar = SnackBar(content: Text('ちゃんと入力して！'));
+  Future<void> _unlinkMail(BuildContext context) async {
+    if (_auth.currentUser == null) {
+      final snackBar = SnackBar(content: Text('認証情報がないぜぇ？'));
       Scaffold.of(context).showSnackBar(snackBar);
+      return;
     }
     try {
-      await _auth.createUserWithEmailAndPassword(email: email, password: pass);
+      final providerData = _auth.currentUser.providerData;
+      for (UserInfo userInfo in providerData) {
+        if (userInfo.providerId == 'password') {
+          _auth.currentUser.unlink(userInfo.providerId);
+          final snackBar = SnackBar(content: Text('mailのunlink完了だぜぇ？'));
+          Scaffold.of(context).showSnackBar(snackBar);
+        }
+      }
     } on Exception catch (e) {
       final snackBar = SnackBar(content: Text('おっと失敗したようだ'));
       Scaffold.of(context).showSnackBar(snackBar);
@@ -302,9 +339,24 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<void> _login(BuildContext context) async {
+  Future<void> _emailSignUp(BuildContext context) async {
+    if (_email == null && _pass == null && _pass.length > 5) {
+      final snackBar = SnackBar(content: Text('ちゃんと入力して！'));
+      Scaffold.of(context).showSnackBar(snackBar);
+    }
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: pass);
+      await _auth.createUserWithEmailAndPassword(
+          email: _email, password: _pass);
+    } on Exception catch (e) {
+      final snackBar = SnackBar(content: Text('おっと失敗したようだ'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      print(e);
+    }
+  }
+
+  Future<void> _emailLogin(BuildContext context) async {
+    try {
+      await _auth.signInWithEmailAndPassword(email: _email, password: _pass);
     } on Exception catch (e) {
       final snackBar = SnackBar(content: Text('おっと失敗したようだ'));
       Scaffold.of(context).showSnackBar(snackBar);
@@ -321,7 +373,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     try {
       final AuthCredential credential =
-          EmailAuthProvider.credential(email: email, password: pass);
+          EmailAuthProvider.credential(email: _email, password: _pass);
       await _auth.currentUser.linkWithCredential(credential);
       final snackBar = SnackBar(content: Text('リンク完了したかもだぜぇ？'));
       Scaffold.of(context).showSnackBar(snackBar);
@@ -335,5 +387,28 @@ class _MyHomePageState extends State<MyHomePage> {
       }
       print(e);
     }
+  }
+
+  Future<void> _sendEmailVerification() async {
+    if (_auth.currentUser == null) {
+      final snackBar = SnackBar(content: Text('ログインしてからにしてくれい'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      return;
+    }
+    final providerData = _auth.currentUser.providerData;
+    final providers = providerData.map((e) => e.providerId);
+    if (!providers.contains('password')) {
+      final snackBar = SnackBar(content: Text('メール認証がまだ終わってないぞ'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      return;
+    }
+
+    if (_auth.currentUser.emailVerified) {
+      final snackBar = SnackBar(content: Text('すでに確認済です'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      return;
+    }
+
+    await _auth.currentUser.sendEmailVerification();
   }
 }
