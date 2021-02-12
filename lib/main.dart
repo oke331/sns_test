@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_twitter_login/flutter_twitter_login.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sns_test/twitter_api_key.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +38,10 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   final _googleSignIn = new GoogleSignIn();
   final _auth = FirebaseAuth.instance;
+  final TwitterLogin _twitterLogin = TwitterLogin(
+    consumerKey: twitterConsumerKey,
+    consumerSecret: twitterSecretKey,
+  );
   String _email;
   String _pass;
   bool _isEmailVerified;
@@ -47,7 +53,7 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: StreamBuilder<User>(
-        stream: FirebaseAuth.instance.userChanges(),
+        stream: _auth.userChanges(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(
@@ -116,6 +122,18 @@ class _MyHomePageState extends State<MyHomePage> {
                       child: Text('Google紐付け'),
                       onPressed: () async {
                         await _handleGoogleSignInAndLink(context);
+                      },
+                    ),
+                    ElevatedButton(
+                      child: Text('Twitter ログイン'),
+                      onPressed: () async {
+                        await _handleTwitterSignIn(context);
+                      },
+                    ),
+                    ElevatedButton(
+                      child: Text('Twitter紐付け'),
+                      onPressed: () async {
+                        await _handleTwitterSignInAndLink(context);
                       },
                     ),
                     SizedBox(height: 20),
@@ -188,6 +206,16 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ),
                     ElevatedButton(
+                      child: Text('Twitterのリンク解除'),
+                      onPressed: () async {
+                        await _unlinkMail(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        primary: Colors.green,
+                        onPrimary: Colors.white,
+                      ),
+                    ),
+                    ElevatedButton(
                       child: Text('メールのリンク解除'),
                       onPressed: () async {
                         await _unlinkMail(context);
@@ -226,6 +254,21 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<void> _handleTwitterSignIn(BuildContext context) async {
+    try {
+      final twitterUser = await _twitterLogin.authorize();
+      final AuthCredential credential = TwitterAuthProvider.credential(
+          accessToken: twitterUser.session.token,
+          secret: twitterUser.session.secret);
+
+      await _auth.signInWithCredential(credential);
+    } on Exception catch (e) {
+      final snackBar = SnackBar(content: Text('おっと失敗したようだ'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      print(e);
+    }
+  }
+
   Future<void> _handleGoogleSignInAndLink(BuildContext context) async {
     if (_auth.currentUser == null) {
       final snackBar = SnackBar(content: Text('ログインしてからにしてくれい'));
@@ -238,6 +281,34 @@ class _MyHomePageState extends State<MyHomePage> {
       GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
           idToken: googleAuth.idToken, accessToken: googleAuth.accessToken);
+      await _auth.currentUser.linkWithCredential(credential);
+      final snackBar = SnackBar(content: Text('リンク完了したかもだぜぇ？'));
+      Scaffold.of(context).showSnackBar(snackBar);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'credential-already-in-use') {
+        final snackBar = SnackBar(content: Text('エラー：すでに紐づいているとのこと'));
+        await _googleSignIn.signOut();
+        Scaffold.of(context).showSnackBar(snackBar);
+      } else {
+        final snackBar = SnackBar(content: Text('おっと失敗したようだ'));
+        Scaffold.of(context).showSnackBar(snackBar);
+      }
+      print(e);
+    }
+  }
+
+  Future<void> _handleTwitterSignInAndLink(BuildContext context) async {
+    if (_auth.currentUser == null) {
+      final snackBar = SnackBar(content: Text('ログインしてからにしてくれい'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      return;
+    }
+
+    try {
+      final twitterUser = await _twitterLogin.authorize();
+      final AuthCredential credential = TwitterAuthProvider.credential(
+          accessToken: twitterUser.session.token,
+          secret: twitterUser.session.secret);
       await _auth.currentUser.linkWithCredential(credential);
       final snackBar = SnackBar(content: Text('リンク完了したかもだぜぇ？'));
       Scaffold.of(context).showSnackBar(snackBar);
@@ -303,10 +374,33 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       final providerData = _auth.currentUser.providerData;
       for (UserInfo userInfo in providerData) {
-        if (userInfo.providerId == 'google.com') {
+        if (userInfo.providerId == GoogleAuthProvider.PROVIDER_ID) {
           _auth.currentUser.unlink(userInfo.providerId);
           await _googleSignIn.signOut();
           final snackBar = SnackBar(content: Text('Googleのunlink完了だぜぇ？'));
+          Scaffold.of(context).showSnackBar(snackBar);
+        }
+      }
+    } on Exception catch (e) {
+      final snackBar = SnackBar(content: Text('おっと失敗したようだ'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      print(e);
+    }
+  }
+
+  Future<void> _unlinkTwitter(BuildContext context) async {
+    if (_auth.currentUser == null) {
+      final snackBar = SnackBar(content: Text('認証情報がないぜぇ？'));
+      Scaffold.of(context).showSnackBar(snackBar);
+      return;
+    }
+    try {
+      final providerData = _auth.currentUser.providerData;
+      for (UserInfo userInfo in providerData) {
+        if (userInfo.providerId == TwitterAuthProvider.PROVIDER_ID) {
+          _auth.currentUser.unlink(userInfo.providerId);
+          await _twitterLogin.logOut();
+          final snackBar = SnackBar(content: Text('Twitterのunlink完了だぜぇ？'));
           Scaffold.of(context).showSnackBar(snackBar);
         }
       }
@@ -326,7 +420,7 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       final providerData = _auth.currentUser.providerData;
       for (UserInfo userInfo in providerData) {
-        if (userInfo.providerId == 'password') {
+        if (userInfo.providerId == EmailAuthProvider.PROVIDER_ID) {
           _auth.currentUser.unlink(userInfo.providerId);
           final snackBar = SnackBar(content: Text('mailのunlink完了だぜぇ？'));
           Scaffold.of(context).showSnackBar(snackBar);
