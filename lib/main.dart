@@ -242,7 +242,7 @@ class _MyHomePageState extends State<MyHomePage> {
       final snackBar = SnackBar(content: Text('リンク完了したかもだぜぇ？'));
       Scaffold.of(context).showSnackBar(snackBar);
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
+      if (e.code == 'credential-already-in-use') {
         final snackBar = SnackBar(content: Text('エラー：すでに紐づいているとのこと'));
         await _googleSignIn.signOut();
         Scaffold.of(context).showSnackBar(snackBar);
@@ -278,7 +278,7 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       final fireStore = FirebaseFirestore.instance;
       await fireStore
-          .collection('user')
+          .collection('sns_test_app')
           .doc(_auth.currentUser.uid)
           .collection(DateTime.now().toString())
           .doc()
