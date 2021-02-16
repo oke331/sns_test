@@ -92,7 +92,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 30),
                               child: Text(
-                                  'ログイン状態：${user.providerId}\nuid：${user.uid}\nemail:${user.email}'),
+                                  'ログイン状態：${user.providerId}\nuid：${user.uid}\nemail:${user.email}\ndisplayName:${user.displayName}'),
                             ),
                           ],
                         ),
@@ -208,7 +208,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ElevatedButton(
                       child: Text('Twitterのリンク解除'),
                       onPressed: () async {
-                        await _unlinkMail(context);
+                        await _unlinkTwitter(context);
                       },
                       style: ElevatedButton.styleFrom(
                         primary: Colors.green,
@@ -491,7 +491,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     final providerData = _auth.currentUser.providerData;
     final providers = providerData.map((e) => e.providerId);
-    if (!providers.contains('password')) {
+    if (!providers.contains(EmailAuthProvider.PROVIDER_ID)) {
       final snackBar = SnackBar(content: Text('メール認証がまだ終わってないぞ'));
       Scaffold.of(context).showSnackBar(snackBar);
       return;
